@@ -1,0 +1,13 @@
+body {
+  background: indianred;
+
+  background-image: url("https://i.gifer.com/VeC.gif"), url("https://i.gifer.com/DDt.gif");
+  background-repeat: repeat, repeat;
+  background-position: 0 0;
+  background-size: 20%, 80px;
+}
+
+img {
+  border: 1px solid #000;
+  max-width: 100%;
+}
