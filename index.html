@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Google AI Search</title>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  
+  <link rel="stylesheet" href="test.css">
+  <script src="test.js" defer></script>
+</head>
+<body>
+  <div class="search-container">
+    <div class="search-box">
+      <img src="Diren-3-18-2025.png" alt="Google Logo" class="logo">
+      <div class="search-input-container">
+        <input type="text" id="search-input" placeholder="Ask Diren ...">
+        <span class="material-icons search-icon">search</span>
+        <span class="material-icons trash-icon" id="clear-history">delete</span>
+      </div>
+    </div>
+  </div>
+  
+  <div id="results-container">
+    <!-- Current result will appear here -->
+  </div>
+
+  <div id="history-container-wrapper">
+    <!-- Add back the history icon -->
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+      <path d="M13 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-7-7V3z"/>
+      <path d="M12 8v5h5v-2h-3V8z"/>
+    </svg>
+  </div>
+</body>
+</html>
