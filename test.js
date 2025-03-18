@@ -1,10 +1,10 @@
-// Google Gemini API Key
+﻿// Google Gemini API Key
 const API_KEY = 'AIzaSyDTKe3EoS3KJR8XbcX9PuF8QGaTKL5WNU4';
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
 // Set to true to use mock responses for development (when API quota is exceeded)
-const USE_MOCK_RESPONSE = false;
+const USE_MOCK_RESPONSE = false; // Set to false to use real API
 
 /*
  * Alternative solution: If direct API calls don't work due to CORS or API restrictions,
@@ -54,7 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear history without confirmation
     queryHistory = [];
     localStorage.removeItem('queryHistory');
-    historyContainer.innerHTML = '';
+    historyContainer.innerHTML = '<div class="no-history">No chat history yet</div>';
+    
+    // Also clear the results container
+    resultsContainer.innerHTML = '';
     
     // Show toast notification
     showToast('Chat history cleared');
@@ -89,13 +92,12 @@ document.addEventListener('DOMContentLoaded', () => {
     historyContainer.innerHTML = '';
     
     if (queryHistory.length === 0) {
+      historyContainer.innerHTML = '<div class="no-history">No chat history yet</div>';
       return;
     }
     
     // Display history items from newest to oldest
-    for (let i = queryHistory.length - 1; i >= 0; i--) {
-      const item = queryHistory[i];
-      
+    queryHistory.forEach(item => {
       const historyItem = document.createElement('div');
       historyItem.className = 'history-item';
       
@@ -119,12 +121,13 @@ document.addEventListener('DOMContentLoaded', () => {
       historyItem.appendChild(queryElement);
       historyItem.appendChild(responseElement);
       historyContainer.appendChild(historyItem);
-    }
+    });
   };
 
   // Function to add a new item to history
   const addToHistory = (query, response) => {
-    queryHistory.push({
+    // Add new item to the beginning of the array (newest first)
+    queryHistory.unshift({
       query,
       response,
       timestamp: new Date().toISOString()
@@ -132,10 +135,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Limit history to 20 items
     if (queryHistory.length > 20) {
-      queryHistory.shift();
+      queryHistory.pop(); // Remove oldest item
     }
     
+    // Save to localStorage
     saveHistory();
+    
+    // Update display
     displayHistory();
   };
 
@@ -188,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Build the request for Gemini API
-    let url = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent';
+    let url = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-8b:generateContent';
     
     // Apply CORS proxy if enabled
     if (USE_CORS_PROXY) {
@@ -224,10 +230,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       ],
       generationConfig: {
-        temperature: 0.7,
+        temperature: 1,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 800
+        maxOutputTokens: 8192
       }
     };
     
@@ -240,8 +246,10 @@ document.addEventListener('DOMContentLoaded', () => {
       body: JSON.stringify(requestData)
     })
       .then(response => {
+        console.log('API Response status:', response.status);
         if (!response.ok) {
           return response.text().then(text => {
+            console.error('API Error response:', text);
             // Check if error is due to quota exhaustion
             if (text.includes("RESOURCE_EXHAUSTED") || text.includes("quota")) {
               throw new Error("API quota exceeded. Please try again later or upgrade your plan.");
@@ -253,6 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return response.json();
       })
       .then(data => {
+        console.log('API Response data:', data);
         displayGeminiResults(data, originalQuery);
       })
       .catch(error => {
@@ -320,6 +329,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const responseContainer = document.createElement('div');
     responseContainer.className = 'gemini-response';
     
+    // Important: Add the response container to the DOM
+    resultsContainer.appendChild(responseContainer);
+    
     // Format the response with paragraphs
     const paragraphs = responseText.split('\n\n');
     let currentParagraphIndex = 0;
@@ -350,6 +362,8 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             // All paragraphs typed, add to history
             addToHistory(query, responseText);
+            // Remove typing class after completion
+            span.classList.remove('typing');
           }
         }
       };
