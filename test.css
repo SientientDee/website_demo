@@ -299,16 +299,15 @@ body {
 
 /* Typewriter effect styles */
 .typing {
-  display: inline-block;
+  display: inline;
   position: relative;
+  white-space: pre-wrap;
 }
 
 .typing::after {
   content: '|';
   position: absolute;
   right: -4px;
-  top: 0;
-  font-weight: bold;
   color: #4285F4;
   animation: blink 0.7s infinite;
 }

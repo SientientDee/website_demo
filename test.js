@@ -1,5 +1,5 @@
-﻿// Google Gemini API Key
-const API_KEY = 'AIzaSyDTKe3EoS3KJR8XbcX9PuF8QGaTKL5WNU4';
+﻿// OpenRouter API Key
+const API_KEY = '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';
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
@@ -193,8 +193,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Build the request for Gemini API
-    let url = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-8b:generateContent';
+    // Build the request for OpenRouter API (Qwen 32B)
+    let url = 'https://openrouter.ai/api/v1/chat/completions';
     
     // Apply CORS proxy if enabled
     if (USE_CORS_PROXY) {
@@ -202,46 +202,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     const requestData = {
-      contents: [
+      model: 'qwen/qwq-32b:free',
+      messages: [
         {
-          parts: [
-            {
-              text: query
-            }
-          ]
+          role: 'user',
+          content: query
         }
       ],
-      safetySettings: [
-        {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_NONE"
-        },
-        {
-          category: "HARM_CATEGORY_HATE_SPEECH",
-          threshold: "BLOCK_MEDIUM_AND_ABOVE"
-        },
-        {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_MEDIUM_AND_ABOVE"
-        },
-        {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_MEDIUM_AND_ABOVE"
-        }
-      ],
-      generationConfig: {
-        temperature: 1,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192
-      }
+      temperature: 1,
+      top_k: 40,
+      top_p: 0.95,
+      max_tokens: 8192
     };
     
-    // Fetch results from Gemini API
-    fetch(`${url}?key=${API_KEY}`, {
+    // Fetch results from OpenRouter API
+    fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+        'HTTP-Referer': window.location.href
       },
       body: JSON.stringify(requestData)
     })
@@ -265,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayGeminiResults(data, originalQuery);
       })
       .catch(error => {
-        console.error('Error fetching Gemini results:', error);
+        console.error('Error fetching OpenRouter results:', error);
         
         let errorMessage = error.message;
         
@@ -274,11 +254,11 @@ document.addEventListener('DOMContentLoaded', () => {
           errorMessage = `
             <div class="error">
               <p>${error.message}</p>
-              <p>Google Gemini API has a limited free tier. You have reached the quota limit.</p>
+              <p>OpenRouter API has a limited free tier. You have reached the quota limit.</p>
               <p>Solutions:</p>
               <ol>
                 <li>Wait until your quota resets (usually daily)</li>
-                <li>Set up billing in Google Cloud Console and upgrade to a paid tier</li>
+                <li>Set up billing in OpenRouter Console and upgrade to a paid tier</li>
                 <li>Use a different API key</li>
               </ol>
             </div>
@@ -289,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
               <p>Error: ${error.message}</p>
               <p>Possible solutions:</p>
               <ol>
-                <li>Make sure you've enabled the Gemini API in your Google Cloud Console</li>
-                <li>Enable billing on your Google Cloud account (required for API usage)</li>
+                <li>Make sure you've enabled the OpenRouter API in your OpenRouter Console</li>
+                <li>Enable billing on your OpenRouter account (required for API usage)</li>
                 <li>Check if your API key has the proper permissions</li>
                 <li>Try using a proxy server if CORS is an issue</li>
               </ol>
@@ -305,87 +285,81 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   };
 
-  // Function to display Gemini results with typewriter effect
+  // Function to display API results with typewriter effect
   const displayGeminiResults = (data, query) => {
     resultsContainer.innerHTML = '';
     
-    if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
+    if (!data.choices || data.choices.length === 0) {
       resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
       addToHistory(query, "No results found");
       return;
     }
     
-    // Get the response text from the content parts
-    const contentParts = data.candidates[0].content.parts;
-    let responseText = '';
-    
-    for (const part of contentParts) {
-      if (part.text) {
-        responseText += part.text;
-      }
-    }
+    // Get the response text from the content
+    const responseText = data.choices[0].message.content;
     
     // Create a formatted response container
     const responseContainer = document.createElement('div');
     responseContainer.className = 'gemini-response';
-    
-    // Important: Add the response container to the DOM
     resultsContainer.appendChild(responseContainer);
     
-    // Format the response with paragraphs
-    const paragraphs = responseText.split('\n\n');
-    let currentParagraphIndex = 0;
+    // Format the text with paragraph breaks but keep it as a single typing animation
+    const formattedText = responseText;
     
-    // Function to type out a paragraph
-    const typeParagraph = (paragraph, index) => {
-      if (!paragraph.trim()) return;
-      
-      const p = document.createElement('p');
-      const span = document.createElement('span');
-      span.className = 'typing';
-      p.appendChild(span);
-      responseContainer.appendChild(p);
-      
-      let currentCharIndex = 0;
-      const chars = paragraph.split('');
-      
-      const typeChar = () => {
-        if (currentCharIndex < chars.length) {
-          span.textContent += chars[currentCharIndex];
-          currentCharIndex++;
-          setTimeout(typeChar, 20); // Adjust speed here (lower = faster)
+    // Prepare for typing animation
+    let currentPosition = 0;
+    const textLength = formattedText.length;
+    
+    // Create a span to hold the typed text
+    const typingSpan = document.createElement('span');
+    typingSpan.className = 'typing';
+    responseContainer.appendChild(typingSpan);
+    
+    // Function to type characters one by one
+    const typeNextChar = () => {
+      if (currentPosition < textLength) {
+        const char = formattedText[currentPosition];
+        
+        // Check if we need to create a paragraph break
+        if (currentPosition > 0 && 
+            formattedText[currentPosition-1] === '\n' && 
+            char === '\n') {
+          // Insert a paragraph break
+          typingSpan.innerHTML += '<br><br>';
+          currentPosition++; // Skip the second newline
+        } else if (char === '\n') {
+          // Just skip the newline character, we'll handle breaks separately
+          currentPosition++;
+          typeNextChar();
+          return;
         } else {
-          // Move to next paragraph
-          currentParagraphIndex++;
-          if (currentParagraphIndex < paragraphs.length) {
-            setTimeout(() => typeParagraph(paragraphs[currentParagraphIndex], currentParagraphIndex), 500);
-          } else {
-            // All paragraphs typed, add to history
-            addToHistory(query, responseText);
-            // Remove typing class after completion
-            span.classList.remove('typing');
-          }
+          // Add the character
+          typingSpan.textContent += char;
         }
-      };
-      
-      typeChar();
+        
+        currentPosition++;
+        setTimeout(typeNextChar, 20); // Adjust speed here (lower = faster)
+      } else {
+        // Typing completed, add to history
+        addToHistory(query, responseText);
+      }
     };
     
-    // Start typing the first paragraph
-    typeParagraph(paragraphs[0], 0);
+    // Start typing animation
+    typeNextChar();
   };
 
   // Function to display mock response for development
   const displayMockResponse = (query) => {
     const mockResponses = {
-      default: "This is a mock response because the API quota has been exceeded. In a real implementation, this would be a response from the Gemini API. You can customize this response for development purposes.\n\nThe Gemini API has quota limits on the free tier. To use the actual API, you would need to:\n1. Wait for your quota to reset\n2. Set up billing in Google Cloud Console\n3. Use a different API key",
-      "hello": "Hello there! I'm a simulated response from the Gemini AI assistant. How can I help you today?",
-      "hi": "Hi! I'm a simulated Gemini AI response. What can I help you with today?",
+      default: "This is a mock response because the API quota has been exceeded. In a real implementation, this would be a response from the OpenRouter API. You can customize this response for development purposes.\n\nThe OpenRouter API has quota limits on the free tier. To use the actual API, you would need to:\n1. Wait for your quota to reset\n2. Set up billing in OpenRouter Console\n3. Use a different API key",
+      "hello": "Hello there! I'm a simulated response from the OpenRouter AI assistant. How can I help you today?",
+      "hi": "Hi! I'm a simulated OpenRouter AI response. What can I help you with today?",
       "what is ai": "Artificial Intelligence (AI) refers to the simulation of human intelligence in machines that are programmed to think and learn like humans. AI encompasses various technologies including machine learning, natural language processing, computer vision, and more.\n\nThere are two main types of AI:\n- Narrow AI: Designed for specific tasks (like virtual assistants)\n- General AI: Hypothetical AI with human-like cognitive abilities\n\nThis is a simulated response since the API quota is exceeded.",
-      "tell me a joke": "Why don't scientists trust atoms?\n\nBecause they make up everything!\n\n(This is a mock response since the Gemini API quota has been exceeded)",
+      "tell me a joke": "Why don't scientists trust atoms?\n\nBecause they make up everything!\n\n(This is a mock response since the OpenRouter API quota has been exceeded)",
       "what is gemini": "Gemini is Google's most capable AI model family. It's a multimodal AI system that can understand and combine different types of information like text, code, audio, image, and video.\n\nGemini comes in three sizes:\n- Gemini Ultra: The largest and most capable model\n- Gemini Pro: The best model for scaling across a wide range of tasks\n- Gemini Nano: The most efficient model for on-device tasks\n\nGemini represents a significant advancement in AI technology, particularly in its multimodal reasoning capabilities.",
-      "who are you": "I'm simulating a response from Google's Gemini AI assistant. Gemini is a multimodal AI developed by Google that can understand and generate text, code, images, and more. This is a mock response since the API quota has been exceeded, but in a real implementation, you'd be interacting with Google's advanced large language model.",
-      "what can you do": "As a Gemini AI assistant, I'm designed to:\n\n- Answer questions and provide information\n- Generate creative content like stories or poems\n- Help with writing tasks and communication\n- Assist with coding and technical problems\n- Analyze and explain complex topics\n- Help with learning and education\n\nNote: This is a mock response since the actual API quota has been exceeded."
+      "who are you": "I'm simulating a response from Google's OpenRouter AI assistant. OpenRouter is a multimodal AI developed by Google that can understand and generate text, code, images, and more. This is a mock response since the API quota has been exceeded, but in a real implementation, you'd be interacting with Google's advanced large language model.",
+      "what can you do": "As a OpenRouter AI assistant, I'm designed to:\n\n- Answer questions and provide information\n- Generate creative content like stories or poems\n- Help with writing tasks and communication\n- Assist with coding and technical problems\n- Analyze and explain complex topics\n- Help with learning and education\n\nNote: This is a mock response since the actual API quota has been exceeded."
     };
     
     // Try to find the most relevant mock response by checking if query contains keywords
