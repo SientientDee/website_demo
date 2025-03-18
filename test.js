@@ -1,5 +1,5 @@
 ﻿// OpenRouter API Key
-const API_KEY = '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';
+const API_KEY = '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';
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
