@@ -2,7 +2,8 @@
 // This API key will be managed securely on Vercel through Environment Variables
 // For local development only - remove before deploying to GitHub
 
-const API_KEY = process.env.OPENROUTER_API_KEY;
+// Don't use process.env directly in browser code
+const API_KEY = ''; // Leave empty for production - API key will be used server-side
 
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
