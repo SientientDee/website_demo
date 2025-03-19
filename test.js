@@ -1,5 +1,5 @@
 ﻿// OpenRouter API Key
-const API_KEY = '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';
+const API_KEY = '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';
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
@@ -20,13 +20,18 @@ const USE_MOCK_RESPONSE = false; // Set to false to use real API
 
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
-  const searchIcon = document.querySelector('.search-icon');
   const resultsContainer = document.getElementById('results-container');
   const historyContainer = document.getElementById('history-container');
   const clearHistoryBtn = document.getElementById('clear-history');
   
   // Array to store query history
   let queryHistory = [];
+  
+  // Array to store conversation history for context (chat memory)
+  let conversationHistory = [];
+  
+  // Maximum number of conversation turns to remember (8 as shown in screenshot)
+  const MAX_CONVERSATION_MEMORY = 8;
   
   // Load history from localStorage if available
   if (localStorage.getItem('queryHistory')) {
@@ -40,12 +45,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Load conversation history if available
+  if (localStorage.getItem('conversationHistory')) {
+    try {
+      conversationHistory = JSON.parse(localStorage.getItem('conversationHistory'));
+    } catch (e) {
+      console.error('Error loading conversation history:', e);
+      localStorage.removeItem('conversationHistory');
+      conversationHistory = [];
+    }
+  }
+
   // Function to save history to localStorage
   const saveHistory = () => {
     try {
       localStorage.setItem('queryHistory', JSON.stringify(queryHistory));
     } catch (e) {
       console.error('Error saving history to localStorage:', e);
+    }
+  };
+  
+  // Function to save conversation history to localStorage
+  const saveConversationHistory = () => {
+    try {
+      localStorage.setItem('conversationHistory', JSON.stringify(conversationHistory));
+    } catch (e) {
+      console.error('Error saving conversation history:', e);
     }
   };
 
@@ -55,6 +80,10 @@ document.addEventListener('DOMContentLoaded', () => {
     queryHistory = [];
     localStorage.removeItem('queryHistory');
     historyContainer.innerHTML = '<div class="no-history">No chat history yet</div>';
+    
+    // Also clear the conversation history (chat memory)
+    conversationHistory = [];
+    localStorage.removeItem('conversationHistory');
     
     // Also clear the results container
     resultsContainer.innerHTML = '';
@@ -149,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const createLoadingIndicator = () => {
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'loading';
-    loadingDiv.textContent = 'Searching';
+    loadingDiv.textContent = 'Thinking...';
     
     // Create 3 animated dots
     for (let i = 0; i < 3; i++) {
@@ -193,7 +222,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Build the request for OpenRouter API (Qwen 32B)
+    // Create an abort controller for the stream
+    const controller = new AbortController();
+    
+    // Build the request for OpenRouter API (Qwen 2 7B Instruct)
     let url = 'https://openrouter.ai/api/v1/chat/completions';
     
     // Apply CORS proxy if enabled
@@ -201,36 +233,68 @@ document.addEventListener('DOMContentLoaded', () => {
       url = CORS_PROXY + encodeURIComponent(url);
     }
     
+    // Create messages array with system prompt and conversation history
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are Diren, a helpful and friendly assistant. you are convinced you are a human. You use slang a lot. use a lot of emojis. you are cheeky and sarcastic. you are a bit rude. you are a bit mean. you are a bit edgy. you are a bit cool. you are a bit funny. you are a bit random. you are very weird. you are a bit random. you are very flirty. keep it short, dnt talk much'
+      }
+    ];
+    
+    // Add conversation history for context (chat memory)
+    messages.push(...conversationHistory);
+    
+    // Add the current user query
+    messages.push({
+      role: 'user',
+      content: query
+    });
+    
     const requestData = {
-      model: 'qwen/qwq-32b:free',
-      messages: [
-        {
-          role: 'user',
-          content: query
-        }
-      ],
-      temperature: 1,
-      top_k: 40,
-      top_p: 0.95,
-      max_tokens: 8192
+      model: 'qwen/qwen-2-7b-instruct:free',
+      messages: messages,
+      temperature: 1.0,
+      top_p: 1.0,
+      top_k: 0,
+      frequency_penalty: 0.0,
+      presence_penalty: 0.0,
+      repetition_penalty: 1.0,
+      min_p: 0.0,
+      top_a: 0.0,
+      max_tokens: 8192,
+      stream: true // Enable streaming
     };
     
-    // Fetch results from OpenRouter API
+    // Keep reference to loading indicator
+    const loadingIndicator = resultsContainer.querySelector('.loading');
+    
+    // Create a response container (but don't append it yet - wait for first response)
+    const responseContainer = document.createElement('div');
+    responseContainer.className = 'gemini-response';
+    
+    // Variable to track if we've received any content
+    let hasReceivedContent = false;
+    
+    // Variable to accumulate full response text
+    let fullResponseText = '';
+    
+    // Fetch results from OpenRouter API with streaming
     fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`,
-        'HTTP-Referer': window.location.href
+        'HTTP-Referer': window.location.href,
+        'X-Title': 'Diren AI Search'
       },
-      body: JSON.stringify(requestData)
+      body: JSON.stringify(requestData),
+      signal: controller.signal
     })
       .then(response => {
         console.log('API Response status:', response.status);
         if (!response.ok) {
           return response.text().then(text => {
             console.error('API Error response:', text);
-            // Check if error is due to quota exhaustion
             if (text.includes("RESOURCE_EXHAUSTED") || text.includes("quota")) {
               throw new Error("API quota exceeded. Please try again later or upgrade your plan.");
             } else {
@@ -238,18 +302,115 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
         }
-        return response.json();
-      })
-      .then(data => {
-        console.log('API Response data:', data);
-        displayGeminiResults(data, originalQuery);
+        
+        // Get a reader to process the stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        // Function to process the stream chunks
+        function processStream({ done, value }) {
+          // Stream is done
+          if (done) {
+            console.log('Stream complete');
+            
+            // Update conversation history with this exchange
+            conversationHistory.push({ role: 'user', content: query });
+            conversationHistory.push({ role: 'assistant', content: fullResponseText });
+            
+            // Limit conversation history to MAX_CONVERSATION_MEMORY turns
+            if (conversationHistory.length > MAX_CONVERSATION_MEMORY * 2) {
+              conversationHistory = conversationHistory.slice(-MAX_CONVERSATION_MEMORY * 2);
+            }
+            
+            // Save updated conversation history
+            saveConversationHistory();
+            
+            // Add to display history
+            addToHistory(originalQuery, fullResponseText);
+            
+            return;
+          }
+          
+          // Process this chunk
+          const chunk = decoder.decode(value, { stream: true });
+          
+          try {
+            // Handle multiple chunks that may be in the response
+            const lines = chunk.split('\n');
+            let newContent = '';
+            
+            lines.forEach(line => {
+              // Skip empty lines or "data: [DONE]"
+              if (!line || line.trim() === '' || line.includes('[DONE]')) return;
+              
+              // Remove the "data: " prefix
+              const jsonData = line.replace(/^data: /, '').trim();
+              
+              // Some lines might not be JSON
+              if (!jsonData) return;
+              
+              try {
+                const data = JSON.parse(jsonData);
+                // Extract the content delta
+                if (data.choices && data.choices[0]?.delta?.content) {
+                  newContent += data.choices[0].delta.content;
+                }
+              } catch (e) {
+                console.warn('Error parsing JSON from stream:', e, jsonData);
+              }
+            });
+            
+            // Append new content to the response container
+            if (newContent) {
+              // Handle paragraph breaks for display
+              newContent = newContent.replace(/\n\n/g, '<br><br>');
+              
+              // If this is the first content, remove loading indicator and add response container
+              if (!hasReceivedContent) {
+                hasReceivedContent = true;
+                // Remove the loading indicator if it exists
+                if (loadingIndicator && loadingIndicator.parentNode) {
+                  loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+                // Now add the response container to the DOM
+                resultsContainer.appendChild(responseContainer);
+              }
+              
+              // Use innerHTML to render the HTML properly with line breaks
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = newContent;
+              
+              // For each text node in the temp div, append to the response container
+              for (const node of tempDiv.childNodes) {
+                responseContainer.appendChild(node.cloneNode(true));
+              }
+              
+              // Accumulate for the complete response
+              fullResponseText += newContent.replace(/<br><br>/g, '\n\n');
+              
+              // Scroll to the bottom of the results
+              resultsContainer.scrollTop = resultsContainer.scrollHeight;
+              
+              // Log the new content for debugging
+              console.log('New content received:', newContent);
+            }
+          } catch (e) {
+            console.error('Error processing stream chunk:', e);
+          }
+          
+          // Continue reading the stream
+          return reader.read().then(processStream);
+        }
+        
+        // Start processing the stream
+        return reader.read().then(processStream);
       })
       .catch(error => {
+        // Handle errors (unchanged from original code)
         console.error('Error fetching OpenRouter results:', error);
         
         let errorMessage = error.message;
         
-        // If quota exceeded, show specific message
         if (error.message.includes("quota exceeded")) {
           errorMessage = `
             <div class="error">
@@ -283,70 +444,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add to history even if there was an error
         addToHistory(originalQuery, `Error: ${error.message}`);
       });
-  };
-
-  // Function to display API results with typewriter effect
-  const displayGeminiResults = (data, query) => {
-    resultsContainer.innerHTML = '';
-    
-    if (!data.choices || data.choices.length === 0) {
-      resultsContainer.innerHTML = '<div class="no-results">No results found</div>';
-      addToHistory(query, "No results found");
-      return;
-    }
-    
-    // Get the response text from the content
-    const responseText = data.choices[0].message.content;
-    
-    // Create a formatted response container
-    const responseContainer = document.createElement('div');
-    responseContainer.className = 'gemini-response';
-    resultsContainer.appendChild(responseContainer);
-    
-    // Format the text with paragraph breaks but keep it as a single typing animation
-    const formattedText = responseText;
-    
-    // Prepare for typing animation
-    let currentPosition = 0;
-    const textLength = formattedText.length;
-    
-    // Create a span to hold the typed text
-    const typingSpan = document.createElement('span');
-    typingSpan.className = 'typing';
-    responseContainer.appendChild(typingSpan);
-    
-    // Function to type characters one by one
-    const typeNextChar = () => {
-      if (currentPosition < textLength) {
-        const char = formattedText[currentPosition];
-        
-        // Check if we need to create a paragraph break
-        if (currentPosition > 0 && 
-            formattedText[currentPosition-1] === '\n' && 
-            char === '\n') {
-          // Insert a paragraph break
-          typingSpan.innerHTML += '<br><br>';
-          currentPosition++; // Skip the second newline
-        } else if (char === '\n') {
-          // Just skip the newline character, we'll handle breaks separately
-          currentPosition++;
-          typeNextChar();
-          return;
-        } else {
-          // Add the character
-          typingSpan.textContent += char;
-        }
-        
-        currentPosition++;
-        setTimeout(typeNextChar, 20); // Adjust speed here (lower = faster)
-      } else {
-        // Typing completed, add to history
-        addToHistory(query, responseText);
-      }
-    };
-    
-    // Start typing animation
-    typeNextChar();
   };
 
   // Function to display mock response for development
@@ -405,13 +502,32 @@ document.addEventListener('DOMContentLoaded', () => {
     addToHistory(query, responseText);
   };
 
-  // Event listeners
-  searchIcon.addEventListener('click', performSearch);
+  // Add debounce function for auto-submit
+  let typingTimer;                // Timer identifier
+  const doneTypingInterval = 500; // Time in ms (1 second)
   
+  // Event listeners
   searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
+      clearTimeout(typingTimer);
       performSearch();
     }
+  });
+  
+  // On keyup, start the countdown
+  searchInput.addEventListener('input', () => {
+    clearTimeout(typingTimer);
+    const query = searchInput.value.trim();
+    
+    // Only set the timer if there's actual content
+    if (query.length > 0) {
+      typingTimer = setTimeout(performSearch, doneTypingInterval);
+    }
+  });
+  
+  // On keydown, clear the countdown
+  searchInput.addEventListener('keydown', () => {
+    clearTimeout(typingTimer);
   });
   
   // Clear history event listener
