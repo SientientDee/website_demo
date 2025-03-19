@@ -23,6 +23,11 @@ const USE_MOCK_RESPONSE = false; // Set to false to use real API
  * This approach keeps your API key secure and avoids CORS issues.
  */
 
+// Update the environment detection to include your custom domain
+const IS_VERCEL = window.location.hostname.includes('vercel.app') || 
+                  window.location.hostname.includes('vercel.com') ||
+                  window.location.hostname.includes('i-dont-have-a-resume.com');
+
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
   const resultsContainer = document.getElementById('results-container');
@@ -198,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to get API URL (either direct or via serverless endpoint)
   function getApiUrl() {
     // For Vercel deployment, use our serverless function
-    if (window.location.hostname.includes('vercel.app')) {
+    if (IS_VERCEL) {
       return '/api/chat';
     }
     
