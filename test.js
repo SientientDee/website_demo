@@ -204,7 +204,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function getApiUrl() {
     // For Vercel deployment, use our serverless function
     if (IS_VERCEL) {
-      return '/api/chat';
+      // Use the full URL for the API endpoint to avoid cross-domain issues
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+      
+      // If we're on Vercel's production domain, use a relative path
+      if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
+        return '/api/chat';
+      }
+      
+      // For custom domains, use the Vercel URL for the API
+      // Replace this with your actual Vercel deployment URL
+      return 'https://diren-ai-search.vercel.app/api/chat';
     }
     
     // For local development
