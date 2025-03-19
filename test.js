@@ -332,7 +332,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // If we're on the custom domain, add CORS mode
       if (window.location.hostname === 'i-dont-have-a-resume.com') {
         fetchOptions.mode = 'cors';
-        fetchOptions.credentials = 'omit';
+        fetchOptions.credentials = 'include';
+        headers['Origin'] = 'https://i-dont-have-a-resume.com';
       }
       
       const response = await fetch(url, fetchOptions);
