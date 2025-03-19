@@ -204,9 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function getApiUrl() {
     // For Vercel deployment or custom domain
     if (IS_VERCEL) {
-      // If we're on the custom domain, always use the absolute Vercel deployment URL
+      // If we're on the custom domain, use CORS proxy as a fallback
       if (window.location.hostname === 'i-dont-have-a-resume.com') {
-        return 'https://diren-ai-search.vercel.app/api/chat';
+        // Try direct Vercel URL first, but provide CORS proxy as fallback in case of errors
+        return 'https://corsproxy.io/?https://diren-ai-search.vercel.app/api/chat';
       }
       
       // For Vercel domains, use the relative path
@@ -329,13 +330,20 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify(requestData)
       };
       
-      // If we're on the custom domain, add CORS mode
+      // If we're on the custom domain, use optimized cross-origin settings
       if (window.location.hostname === 'i-dont-have-a-resume.com') {
+        // For cross-origin requests to Vercel
         fetchOptions.mode = 'cors';
-        fetchOptions.credentials = 'include';
+        fetchOptions.credentials = 'same-origin'; // Changed from 'include' to avoid cookie issues
+        // Add all required headers for CORS
         headers['Origin'] = 'https://i-dont-have-a-resume.com';
+        headers['X-Requested-With'] = 'XMLHttpRequest';
       }
       
+      // For debugging
+      console.log('Making request to:', url);
+      console.log('With options:', JSON.stringify(fetchOptions));
+
       const response = await fetch(url, fetchOptions);
       
       if (!response.ok) {
