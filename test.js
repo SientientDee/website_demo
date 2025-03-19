@@ -1,6 +1,6 @@
 ﻿// OpenRouter API Key
-const API_KEY = '';
-// const API_KEY = env.OPENROUTER_API_KEY;
+// const API_KEY = '';
+const API_KEY = env.OPENROUTER_API_KEY;
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
