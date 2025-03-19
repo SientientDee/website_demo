@@ -202,20 +202,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Function to get API URL (either direct or via serverless endpoint)
   function getApiUrl() {
-    // For Vercel deployment, use our serverless function
+    // For Vercel deployment or custom domain
     if (IS_VERCEL) {
-      // Use the full URL for the API endpoint to avoid cross-domain issues
-      const protocol = window.location.protocol;
-      const hostname = window.location.hostname;
-      
-      // If we're on Vercel's production domain, use a relative path
-      if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
-        return '/api/chat';
+      // If we're on the custom domain, always use the absolute Vercel deployment URL
+      if (window.location.hostname === 'i-dont-have-a-resume.com') {
+        return 'https://diren-ai-search.vercel.app/api/chat';
       }
       
-      // For custom domains, use the Vercel URL for the API
-      // Replace this with your actual Vercel deployment URL
-      return 'https://diren-ai-search.vercel.app/api/chat';
+      // For Vercel domains, use the relative path
+      return '/api/chat';
     }
     
     // For local development
@@ -321,23 +316,34 @@ document.addEventListener('DOMContentLoaded', () => {
     
     try {
       // Fetch with streaming response
-      const response = await fetch(url, {
-      method: 'POST',
-      headers: {
+      const headers = {
         'Content-Type': 'application/json',
         'HTTP-Referer': window.location.href,
         'X-Title': 'Diren AI Search'
-      },
-        body: JSON.stringify(requestData)
-      });
+      };
       
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
+      // Determine fetch options based on whether we're using cross-origin requests
+      const fetchOptions = {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(requestData)
+      };
+      
+      // If we're on the custom domain, add CORS mode
+      if (window.location.hostname === 'i-dont-have-a-resume.com') {
+        fetchOptions.mode = 'cors';
+        fetchOptions.credentials = 'omit';
+      }
+      
+      const response = await fetch(url, fetchOptions);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
       
       const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        
+      const decoder = new TextDecoder();
+      
       // Remove loading indicator and append response container
       resultsContainer.innerHTML = '';
       resultsContainer.appendChild(responseContainer);
@@ -389,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveConversationHistory();
       
       // Add to history
-          addToHistory(originalQuery, fullResponseText);
+      addToHistory(originalQuery, fullResponseText);
       
     } catch (error) {
       console.error('Error fetching results:', error);
@@ -413,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
               addToHistory(originalQuery, `Error: ${error.message}`);
     } finally {
       // Always clear the erasing interval
-              clearInterval(eraseInterval);
+      clearInterval(eraseInterval);
     }
   };
 
