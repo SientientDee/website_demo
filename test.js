@@ -306,22 +306,22 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       // Fetch with streaming response
       const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.href,
-          'X-Title': 'Diren AI Search'
-        },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': window.location.href,
+        'X-Title': 'Diren AI Search'
+      },
         body: JSON.stringify(requestData)
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
       
       const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      
+        const decoder = new TextDecoder();
+        
       // Remove loading indicator and append response container
       resultsContainer.innerHTML = '';
       resultsContainer.appendChild(responseContainer);
@@ -373,31 +373,31 @@ document.addEventListener('DOMContentLoaded', () => {
       saveConversationHistory();
       
       // Add to history
-      addToHistory(originalQuery, fullResponseText);
+          addToHistory(originalQuery, fullResponseText);
       
     } catch (error) {
       console.error('Error fetching results:', error);
       
       let errorMessage = `
-        <div class="error">
-          <p>Error: ${error.message}</p>
-          <p>Possible solutions:</p>
-          <ol>
-            <li>Make sure you've enabled the OpenRouter API in your OpenRouter Console</li>
-            <li>Enable billing on your OpenRouter account (required for API usage)</li>
-            <li>Check if your API key has the proper permissions</li>
-            <li>Try using a proxy server if CORS is an issue</li>
-          </ol>
-        </div>
-      `;
-      
-      resultsContainer.innerHTML = errorMessage;
-      
-      // Add to history even if there was an error
-      addToHistory(originalQuery, `Error: ${error.message}`);
+                  <div class="error">
+                    <p>Error: ${error.message}</p>
+                    <p>Possible solutions:</p>
+                    <ol>
+                      <li>Make sure you've enabled the OpenRouter API in your OpenRouter Console</li>
+                      <li>Enable billing on your OpenRouter account (required for API usage)</li>
+                      <li>Check if your API key has the proper permissions</li>
+                      <li>Try using a proxy server if CORS is an issue</li>
+                    </ol>
+                  </div>
+                `;
+              
+              resultsContainer.innerHTML = errorMessage;
+              
+              // Add to history even if there was an error
+              addToHistory(originalQuery, `Error: ${error.message}`);
     } finally {
       // Always clear the erasing interval
-      clearInterval(eraseInterval);
+              clearInterval(eraseInterval);
     }
   };
 
@@ -413,4 +413,25 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Display history on page load
   displayHistory();
+  
+  // Add auto-search functionality after user stops typing
+  let typingTimer;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(typingTimer);
+    
+    if (searchInput.value.trim().length > 0) {
+      // Wait 500ms after user stops typing to trigger search
+      typingTimer = setTimeout(() => {
+        performSearch();
+      }, 500);
+    }
+  });
+  
+  // Keep the Enter key functionality as an alternative
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      clearTimeout(typingTimer); // Clear the timer to prevent double search
+      performSearch();
+    }
+  });
 }); 
