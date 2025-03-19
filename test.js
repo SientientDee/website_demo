@@ -1,6 +1,9 @@
-﻿// OpenRouter API Key
-// const API_KEY = '';
-const API_KEY = OPENROUTER_API_KEY;
+// OpenRouter API Key
+// This API key will be managed securely on Vercel through Environment Variables
+// For local development only - remove before deploying to GitHub
+
+const API_KEY = process.env.OPENROUTER_API_KEY;
+
 // Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
@@ -31,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Array to store conversation history for context (chat memory)
   let conversationHistory = [];
   
-  // Maximum number of conversation turns to remember (8 as shown in screenshot)
+  // Maximum number of conversation turns to remember
   const MAX_CONVERSATION_MEMORY = 8;
   
   // Load history from localStorage if available
@@ -191,8 +194,42 @@ document.addEventListener('DOMContentLoaded', () => {
     return loadingDiv;
   };
 
+  // Function to get API URL (either direct or via serverless endpoint)
+  function getApiUrl() {
+    // For Vercel deployment, use our serverless function
+    if (window.location.hostname.includes('vercel.app')) {
+      return '/api/chat';
+    }
+    
+    // For local development
+    let url = 'https://openrouter.ai/api/v1/chat/completions';
+    
+    // Apply CORS proxy if enabled
+    if (USE_CORS_PROXY) {
+      url = CORS_PROXY + encodeURIComponent(url);
+    }
+    
+    return url;
+  }
+
+  // Function to display mock response (for development when API quota is exceeded)
+  const displayMockResponse = (query) => {
+    const mockResponse = `Hey there! 👋 This is a mock response since you're in development mode. Your query was: "${query}" but I'm not actually calling the API right now. Switch USE_MOCK_RESPONSE to false when you're ready to use the real API! 🚀`;
+    
+    const responseContainer = document.createElement('div');
+    responseContainer.className = 'gemini-response';
+    responseContainer.textContent = mockResponse;
+    
+    // Remove loading indicator and append response
+    resultsContainer.innerHTML = '';
+    resultsContainer.appendChild(responseContainer);
+    
+    // Add to history
+    addToHistory(query, mockResponse);
+  };
+
   // Function to perform search with character-by-character disappearing effect
-  const performSearch = () => {
+  const performSearch = async () => {
     const query = searchInput.value.trim();
     
     if (query === '') {
@@ -223,16 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Create an abort controller for the stream
-    const controller = new AbortController();
-    
-    // Build the request for OpenRouter API (Qwen 2 7B Instruct)
-    let url = 'https://openrouter.ai/api/v1/chat/completions';
-    
-    // Apply CORS proxy if enabled
-    if (USE_CORS_PROXY) {
-      url = CORS_PROXY + encodeURIComponent(url);
-    }
+    // Get the API URL
+    const url = getApiUrl();
     
     // Create messages array with system prompt and conversation history
     const messages = [
@@ -266,274 +295,121 @@ document.addEventListener('DOMContentLoaded', () => {
       stream: true // Enable streaming
     };
     
-    // Keep reference to loading indicator
-    const loadingIndicator = resultsContainer.querySelector('.loading');
-    
-    // Create a response container (but don't append it yet - wait for first response)
+    // Create a response container
     const responseContainer = document.createElement('div');
     responseContainer.className = 'gemini-response';
-    
-    // Variable to track if we've received any content
-    let hasReceivedContent = false;
     
     // Variable to accumulate full response text
     let fullResponseText = '';
     
-    // Fetch results from OpenRouter API with streaming
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'HTTP-Referer': window.location.href,
-        'X-Title': 'Diren AI Search'
-      },
-      body: JSON.stringify(requestData),
-      signal: controller.signal
-    })
-      .then(response => {
-        console.log('API Response status:', response.status);
-        if (!response.ok) {
-          return response.text().then(text => {
-            console.error('API Error response:', text);
-            if (text.includes("RESOURCE_EXHAUSTED") || text.includes("quota")) {
-              throw new Error("API quota exceeded. Please try again later or upgrade your plan.");
-            } else {
-              throw new Error(`API Error (${response.status}): ${text}`);
-            }
-          });
-        }
-        
-        // Get a reader to process the stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        
-        // Function to process the stream chunks
-        function processStream({ done, value }) {
-          // Stream is done
-          if (done) {
-            console.log('Stream complete');
-            
-            // Update conversation history with this exchange
-            conversationHistory.push({ role: 'user', content: query });
-            conversationHistory.push({ role: 'assistant', content: fullResponseText });
-            
-            // Limit conversation history to MAX_CONVERSATION_MEMORY turns
-            if (conversationHistory.length > MAX_CONVERSATION_MEMORY * 2) {
-              conversationHistory = conversationHistory.slice(-MAX_CONVERSATION_MEMORY * 2);
-            }
-            
-            // Save updated conversation history
-            saveConversationHistory();
-            
-            // Add to display history
-            addToHistory(originalQuery, fullResponseText);
-            
-            return;
-          }
-          
-          // Process this chunk
-          const chunk = decoder.decode(value, { stream: true });
-          
-          try {
-            // Handle multiple chunks that may be in the response
-            const lines = chunk.split('\n');
-            let newContent = '';
-            
-            lines.forEach(line => {
-              // Skip empty lines or "data: [DONE]"
-              if (!line || line.trim() === '' || line.includes('[DONE]')) return;
-              
-              // Remove the "data: " prefix
-              const jsonData = line.replace(/^data: /, '').trim();
-              
-              // Some lines might not be JSON
-              if (!jsonData) return;
-              
-              try {
-                const data = JSON.parse(jsonData);
-                // Extract the content delta
-                if (data.choices && data.choices[0]?.delta?.content) {
-                  newContent += data.choices[0].delta.content;
-                }
-              } catch (e) {
-                console.warn('Error parsing JSON from stream:', e, jsonData);
-              }
-            });
-            
-            // Append new content to the response container
-            if (newContent) {
-              // Handle paragraph breaks for display
-              newContent = newContent.replace(/\n\n/g, '<br><br>');
-              
-              // If this is the first content, remove loading indicator and add response container
-              if (!hasReceivedContent) {
-                hasReceivedContent = true;
-                // Remove the loading indicator if it exists
-                if (loadingIndicator && loadingIndicator.parentNode) {
-                  loadingIndicator.parentNode.removeChild(loadingIndicator);
-                }
-                // Now add the response container to the DOM
-                resultsContainer.appendChild(responseContainer);
-              }
-              
-              // Use innerHTML to render the HTML properly with line breaks
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = newContent;
-              
-              // For each text node in the temp div, append to the response container
-              for (const node of tempDiv.childNodes) {
-                responseContainer.appendChild(node.cloneNode(true));
-              }
-              
-              // Accumulate for the complete response
-              fullResponseText += newContent.replace(/<br><br>/g, '\n\n');
-              
-              // Scroll to the bottom of the results
-              resultsContainer.scrollTop = resultsContainer.scrollHeight;
-              
-              // Log the new content for debugging
-              console.log('New content received:', newContent);
-            }
-          } catch (e) {
-            console.error('Error processing stream chunk:', e);
-          }
-          
-          // Continue reading the stream
-          return reader.read().then(processStream);
-        }
-        
-        // Start processing the stream
-        return reader.read().then(processStream);
-      })
-      .catch(error => {
-        // Handle errors (unchanged from original code)
-        console.error('Error fetching OpenRouter results:', error);
-        
-        let errorMessage = error.message;
-        
-        if (error.message.includes("quota exceeded")) {
-          errorMessage = `
-            <div class="error">
-              <p>${error.message}</p>
-              <p>OpenRouter API has a limited free tier. You have reached the quota limit.</p>
-              <p>Solutions:</p>
-              <ol>
-                <li>Wait until your quota resets (usually daily)</li>
-                <li>Set up billing in OpenRouter Console and upgrade to a paid tier</li>
-                <li>Use a different API key</li>
-              </ol>
-            </div>
-          `;
-        } else {
-          errorMessage = `
-            <div class="error">
-              <p>Error: ${error.message}</p>
-              <p>Possible solutions:</p>
-              <ol>
-                <li>Make sure you've enabled the OpenRouter API in your OpenRouter Console</li>
-                <li>Enable billing on your OpenRouter account (required for API usage)</li>
-                <li>Check if your API key has the proper permissions</li>
-                <li>Try using a proxy server if CORS is an issue</li>
-              </ol>
-            </div>
-          `;
-        }
-        
-        resultsContainer.innerHTML = errorMessage;
-        
-        // Add to history even if there was an error
-        addToHistory(originalQuery, `Error: ${error.message}`);
+    try {
+      // Fetch with streaming response
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.href,
+          'X-Title': 'Diren AI Search'
+        },
+        body: JSON.stringify(requestData)
       });
-  };
-
-  // Function to display mock response for development
-  const displayMockResponse = (query) => {
-    const mockResponses = {
-      default: "This is a mock response because the API quota has been exceeded. In a real implementation, this would be a response from the OpenRouter API. You can customize this response for development purposes.\n\nThe OpenRouter API has quota limits on the free tier. To use the actual API, you would need to:\n1. Wait for your quota to reset\n2. Set up billing in OpenRouter Console\n3. Use a different API key",
-      "hello": "Hello there! I'm a simulated response from the OpenRouter AI assistant. How can I help you today?",
-      "hi": "Hi! I'm a simulated OpenRouter AI response. What can I help you with today?",
-      "what is ai": "Artificial Intelligence (AI) refers to the simulation of human intelligence in machines that are programmed to think and learn like humans. AI encompasses various technologies including machine learning, natural language processing, computer vision, and more.\n\nThere are two main types of AI:\n- Narrow AI: Designed for specific tasks (like virtual assistants)\n- General AI: Hypothetical AI with human-like cognitive abilities\n\nThis is a simulated response since the API quota is exceeded.",
-      "tell me a joke": "Why don't scientists trust atoms?\n\nBecause they make up everything!\n\n(This is a mock response since the OpenRouter API quota has been exceeded)",
-      "what is gemini": "Gemini is Google's most capable AI model family. It's a multimodal AI system that can understand and combine different types of information like text, code, audio, image, and video.\n\nGemini comes in three sizes:\n- Gemini Ultra: The largest and most capable model\n- Gemini Pro: The best model for scaling across a wide range of tasks\n- Gemini Nano: The most efficient model for on-device tasks\n\nGemini represents a significant advancement in AI technology, particularly in its multimodal reasoning capabilities.",
-      "who are you": "I'm simulating a response from Google's OpenRouter AI assistant. OpenRouter is a multimodal AI developed by Google that can understand and generate text, code, images, and more. This is a mock response since the API quota has been exceeded, but in a real implementation, you'd be interacting with Google's advanced large language model.",
-      "what can you do": "As a OpenRouter AI assistant, I'm designed to:\n\n- Answer questions and provide information\n- Generate creative content like stories or poems\n- Help with writing tasks and communication\n- Assist with coding and technical problems\n- Analyze and explain complex topics\n- Help with learning and education\n\nNote: This is a mock response since the actual API quota has been exceeded."
-    };
-    
-    // Try to find the most relevant mock response by checking if query contains keywords
-    let responseText = mockResponses.default;
-    
-    // Convert query to lowercase for case-insensitive matching
-    const lowercaseQuery = query.toLowerCase();
-    
-    // Check for exact matches first
-    if (mockResponses[lowercaseQuery]) {
-      responseText = mockResponses[lowercaseQuery];
-    } 
-    // Then check for partial matches if no exact match found
-    else {
-      for (const key in mockResponses) {
-        if (key !== 'default' && lowercaseQuery.includes(key)) {
-          responseText = mockResponses[key];
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      // Remove loading indicator and append response container
+      resultsContainer.innerHTML = '';
+      resultsContainer.appendChild(responseContainer);
+      
+      // Process the stream
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
           break;
         }
+        
+        // Decode the chunk
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Process each line in the chunk
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            try {
+              const jsonData = JSON.parse(line.substring(5).trim());
+              
+              if (jsonData.choices && jsonData.choices.length > 0 && 
+                  jsonData.choices[0].delta && jsonData.choices[0].delta.content) {
+                const content = jsonData.choices[0].delta.content;
+                fullResponseText += content;
+                responseContainer.textContent = fullResponseText;
+              }
+            } catch (e) {
+              console.error('Error parsing JSON from stream:', e);
+            }
+          }
+        }
       }
+      
+      // Update conversation history
+      conversationHistory.push({ role: 'user', content: query });
+      conversationHistory.push({ role: 'assistant', content: fullResponseText });
+      
+      // Limit conversation history to MAX_CONVERSATION_MEMORY messages
+      if (conversationHistory.length > MAX_CONVERSATION_MEMORY * 2) {
+        // Remove oldest query/response pairs (2 entries per conversation turn)
+        conversationHistory = conversationHistory.slice(
+          conversationHistory.length - MAX_CONVERSATION_MEMORY * 2
+        );
+      }
+      
+      // Save conversation history
+      saveConversationHistory();
+      
+      // Add to history
+      addToHistory(originalQuery, fullResponseText);
+      
+    } catch (error) {
+      console.error('Error fetching results:', error);
+      
+      let errorMessage = `
+        <div class="error">
+          <p>Error: ${error.message}</p>
+          <p>Possible solutions:</p>
+          <ol>
+            <li>Make sure you've enabled the OpenRouter API in your OpenRouter Console</li>
+            <li>Enable billing on your OpenRouter account (required for API usage)</li>
+            <li>Check if your API key has the proper permissions</li>
+            <li>Try using a proxy server if CORS is an issue</li>
+          </ol>
+        </div>
+      `;
+      
+      resultsContainer.innerHTML = errorMessage;
+      
+      // Add to history even if there was an error
+      addToHistory(originalQuery, `Error: ${error.message}`);
+    } finally {
+      // Always clear the erasing interval
+      clearInterval(eraseInterval);
     }
-    
-    // Display the mock response
-    resultsContainer.innerHTML = '';
-    
-    // Create a formatted response container
-    const responseContainer = document.createElement('div');
-    responseContainer.className = 'gemini-response';
-    
-    // Format the response with paragraphs
-    const paragraphs = responseText.split('\n\n');
-    paragraphs.forEach(paragraph => {
-      if (paragraph.trim()) {
-        const p = document.createElement('p');
-        p.textContent = paragraph;
-        responseContainer.appendChild(p);
-      }
-    });
-    
-    resultsContainer.appendChild(responseContainer);
-    
-    // Add to history
-    addToHistory(query, responseText);
   };
 
-  // Add debounce function for auto-submit
-  let typingTimer;                // Timer identifier
-  const doneTypingInterval = 500; // Time in ms (1 second)
-  
-  // Event listeners
-  searchInput.addEventListener('keypress', (e) => {
+  // Handle search input (when user presses Enter)
+  searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      clearTimeout(typingTimer);
       performSearch();
     }
   });
   
-  // On keyup, start the countdown
-  searchInput.addEventListener('input', () => {
-    clearTimeout(typingTimer);
-    const query = searchInput.value.trim();
-    
-    // Only set the timer if there's actual content
-    if (query.length > 0) {
-      typingTimer = setTimeout(performSearch, doneTypingInterval);
-    }
-  });
-  
-  // On keydown, clear the countdown
-  searchInput.addEventListener('keydown', () => {
-    clearTimeout(typingTimer);
-  });
-  
-  // Clear history event listener
+  // Handle clear history button
   clearHistoryBtn.addEventListener('click', clearHistory);
   
-  // Focus search input on page load
-  searchInput.focus();
-});
+  // Display history on page load
+  displayHistory();
+}); 
