@@ -2,20 +2,25 @@
 // This keeps your API key secure on the server side
 
 export default async function handler(req, res) {
-  // Set CORS headers to allow cross-origin requests from your custom domain
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // IMPORTANT: Handle preflight OPTIONS request first and respond properly
+  if (req.method === 'OPTIONS') {
+    // These headers are crucial for preflight requests
+    res.setHeader('Access-Control-Allow-Origin', 'https://i-dont-have-a-resume.com');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, HTTP-Referer, X-Title, Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // Respond immediately with 200 OK for OPTIONS requests
+    return res.status(200).end();
+  }
+
+  // Set CORS headers for the actual request as well
   res.setHeader('Access-Control-Allow-Origin', 'https://i-dont-have-a-resume.com');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, HTTP-Referer, X-Title');
-
-  // Handle preflight OPTIONS request
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, HTTP-Referer, X-Title, Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
-  // Only allow POST requests
+  // Only allow POST requests for actual API calls
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -36,7 +41,7 @@ export default async function handler(req, res) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': req.headers['referer'] || 'https://yourdomain.com',
+        'HTTP-Referer': req.headers['referer'] || 'https://i-dont-have-a-resume.com',
         'X-Title': 'Diren AI Search'
       },
       body: JSON.stringify(req.body)
