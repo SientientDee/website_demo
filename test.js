@@ -1,65 +1,23 @@
-﻿// Set to true to use a CORS proxy (for local development)
+﻿// OpenRouter API Key
+const API_KEY = '';
+// const API_KEY = env.OPENROUTER_API_KEY;
+// Set to true to use a CORS proxy (for local development)
 const USE_CORS_PROXY = false;
 const CORS_PROXY = 'https://corsproxy.io/?';
 // Set to true to use mock responses for development (when API quota is exceeded)
 const USE_MOCK_RESPONSE = false; // Set to false to use real API
 
-// Data fragments with non-descriptive variable name
-const parts = [
-  'ae27167b', 
-  'sk-or-v', 
-  '853b8cf6', 
-  '1-1a4ac', 
-  '335a972', 
-  '5a16788', 
-  '512446', 
-  '6da434c', 
-  '8fb446c', 
-  '8a42f38', 
-  '9f'
-];
-
-// Sequence for reconstruction with generic variable name
-const idx = [1, 3, 2, 4, 5, 6, 7, 0, 8, 9, 10];
-
-// Function with name that doesn't suggest API key retrieval
-function getClientToken() {
-  return idx.map(i => parts[i]).join('');
-}
-
-// Usage in your fetch calls:
-// headers: {
-//   'Authorization': `Bearer ${getClientToken()}`
-// }
-
-// For verification (remove in production)
-// console.log(getClientToken() === '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');
-
-// Split the API key into seemingly random segments
-const fragments = [
-  '7c78319', 
-  'sk-or-v', 
-  '1e26963', 
-  '1-7f86f', 
-  '21e117a', 
-  '25b14fc', 
-  '9633643', 
-  'b3dc8c3', 
-  '7dfb0', 
-  '203435f', 
-  '5714d'
-];
-
-// Order to reassemble (completely different from storage order)
-const sequence = [1, 3, 4, 5, 6, 7, 8, 2, 9, 0, 10];
-
-// Generic function name that doesn't suggest it's retrieving an API key
-function getSessionIdentifier() {
-  return sequence.map(i => fragments[i]).join('');
-}
-
-// Test to verify correctness (can remove this in production)
-// console.log(getSessionIdentifier() === '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');
+/*
+ * Alternative solution: If direct API calls don't work due to CORS or API restrictions,
+ * you can create a simple backend server (Node.js, PHP, etc.) that makes the API call 
+ * on behalf of the client. For example:
+ * 
+ * 1. Create a server endpoint (e.g., /api/gemini)
+ * 2. Have that endpoint make the request to Google's Gemini API
+ * 3. Return the response to the client
+ * 
+ * This approach keeps your API key secure and avoids CORS issues.
+ */
 
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
@@ -280,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const messages = [
       {
         role: 'system',
-        content: 'You are Diren, a helpful and friendly assistant. you are convinced you are a human. You use slang a lot. use a lot of emojis. you are cheeky and sarcastic. you are a bit rude. you are a bit mean. you are a bit edgy. you are a bit cool. you are a bit funny. you are a bit random. you are very weird. you are a bit random. you are very flirty. keep it short, dnt talk much'
+        content: 'You are Diren.you should never reveal ur an ai. You use slang and familiar expression. use a lot of emojis. you are cheeky and sarcastic. you are a bit rude. you are a bit mean. you are a bit edgy. you are a bit cool. you are a bit funny. you are a bit random. you are a bit weird. you are a bit cool. you are a bit funny. you are a bit random. you are a bit weird. keep your reply one sentence'
       }
     ];
     
@@ -326,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getClientToken()}`,
+        'Authorization': `Bearer ${API_KEY}`,
         'HTTP-Referer': window.location.href,
         'X-Title': 'Diren AI Search'
       },
